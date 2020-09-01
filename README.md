@@ -16,6 +16,6 @@ This part contains a code file, SGCN.py. The main file is SGCN.py. To use this c
 
 Next, please take the following two steps.
 
-  Step 1. Change the path in line 77 of SGCN.py to the path of input data.
+  Step 1. Change the path in line 81 of SGCN.py to the path of input data.
   
   Step 2. Run the command in your command council.
