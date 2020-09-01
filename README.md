@@ -8,11 +8,11 @@ Due to the size limitation of upload file, we provide website of the Bonn datase
 
 Frequency-domain_Complex_network
 
-This part contains two code files, LVG.m and LPHVG.m. In LPVG and LPHVG, we set the variable L of limited number of penetrations. When you set L to 0, you can build VG and HVG.
+This part contains three code files, LVG.m, LPHVG.m, and graph_representation.m. In LPVG and LPHVG, we set the variable L of limited number of penetrations. When you set L to 0, you can build VG and HVG. In graph_representation.m, you can generate the complex network training_data, train_label, testing_data, and test_label.
 
 SGCN
 
-This part contains two code files, Node_aggregation.m and SGCN.py. The main file is SGCN.py. To use this classifier, please generate the complex networks in advance, and make sure that you have pytorch, Python 3 and all the packages we have used installed.
+This part contains a code file, SGCN.py. The main file is SGCN.py. To use this classifier, please generate the complex networks in advance, and make sure that you have pytorch, Python 3 and all the packages we have used installed.
 
 Next, please take the following two steps.
 
