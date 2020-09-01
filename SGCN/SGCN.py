@@ -3,13 +3,13 @@ import sys
 import torch
 import time
 import scipy.io as sio
-import h5py
 import numpy as np
 from torch.utils.data import TensorDataset, DataLoader
 
+
 def readfile(path):
     print('reading file ...')
-    data = h5py.File(path)
+    data = sio.loadmat(path)
     x_train = []
     x_label = []
     val_data = []
@@ -17,8 +17,8 @@ def readfile(path):
 
     x_train = data['train_data']
     x_label = data['train_label']
-    val_data = data['val_data']
-    val_label = data['val_label']
+    val_data = data['test_data']
+    val_label = data['test_label']
     
     x_train = np.array(x_train, dtype=float)
     val_data = np.array(val_data, dtype=float)
@@ -33,17 +33,18 @@ def readfile(path):
 
 
 class CNNnet(torch.nn.Module):
-      def __init__(self, node_number, batch_size):
+      def __init__(self, node_number, batch_size, k_hop):
           super(CNNnet,self).__init__()
           self.node_number = node_number
           self.batch_size = batch_size
-          self.aggregate_weight = torch.nn.Parameter(tensor([[[1],[1],[torch.linspace(1, node_numbe, node_number)]]]))
+          self.k_hop = k_hop
+          self.aggregate_weight = torch.nn.Parameter(torch.rand(1, 1, node_number))
           self.conv1 = torch.nn.Sequential(
               torch.nn.Conv1d(in_channels=1,
                               out_channels=8,
-                              kernel_size=9,
+                              kernel_size=3,
                               stride=1,
-                              padding=4),
+                              padding=1),
               torch.nn.BatchNorm1d(8),
               torch.nn.ReLU(),
               torch.nn.MaxPool1d(kernel_size=2),
@@ -51,7 +52,7 @@ class CNNnet(torch.nn.Module):
               torch.nn.Dropout(0.2),
           )
           self.conv2 = torch.nn.Sequential(
-              torch.nn.Conv1d(8,16,9,1,4),
+              torch.nn.Conv1d(8,16,3,1,1),
               torch.nn.BatchNorm1d(16),
               torch.nn.ReLU(),
               torch.nn.MaxPool1d(kernel_size=2),
@@ -59,11 +60,14 @@ class CNNnet(torch.nn.Module):
               torch.nn.Dropout(0.2),
           )
           self.mlp1 = torch.nn.Sequential(
-              torch.nn.Linear(1024*16,50),
+              torch.nn.Linear(64*16,50),
               torch.nn.Dropout(0.5),
           )
           self.mlp2 = torch.nn.Linear(50,2)
       def forward(self, x):
+          tmp_x = x
+          for _ in range(self.k_hop):
+              tmp_x = torch.matmul(tmp_x, x)
           x = torch.matmul(self.aggregate_weight, x)
           x = self.conv1(x)
           x = self.conv2(x)
@@ -74,31 +78,34 @@ class CNNnet(torch.nn.Module):
 def main():
 
     parser = argparse.ArgumentParser(description='PyTorch graph convolutional neural net for whole-graph classification')
-    parser.add_argument('--dataset', type=str, default="dataset/dataset.mat", help='path of the dataset (default: data/data.mat)')
+    parser.add_argument('--dataset', type=str, default="dataset/AEF_V_0.mat", help='path of the dataset (default: data/data.mat)')
     parser.add_argument('--node_number', type=int, default=256, help='node number of graph (default: 256)')
     parser.add_argument('--batch_size', type=int, default=32, help='number of input size (default: 128)')
+    parser.add_argument('--k_hop', type=int, default=4, help='times of aggregate (default: 1)')
 
     args = parser.parse_args()
 
-    x_train, x_label, val_data, val_label = readfile(args.dataset)   
+    x_train, x_label, val_data, val_label = readfile(args.dataset)   # 'train.csv'
+    x_train = x_train.permute(2, 0, 1)
     x_label = torch.squeeze(x_label, dim=1).long()
-    x_label = torch.squeeze(x_label, dim=0).long()
 
+    val_data = val_data.permute(2, 0, 1)
     val_label = torch.squeeze(val_label, dim=1).long()    
-    val_label = torch.squeeze(val_label, dim=0).long()    
 
     train_set = TensorDataset(x_train, x_label)
     val_set = TensorDataset(val_data, val_label)
 
+    #batch_size = 128
     train_loader = DataLoader(train_set, batch_size=args.batch_size, shuffle=True, num_workers=0)
-    val_loader = DataLoader(val_set, batch_size=args.batch_size, shuffle=False, num_workers=0)
+    val_loader = DataLoader(val_set, batch_size=args.batch_size, shuffle=True, num_workers=0)
 
-    model = CNNnet(args.node_number, args.batch_size)
-    
+    model = CNNnet(args.node_number, args.batch_size, args.k_hop)
+    #print(model) 
     model  
     loss = torch.nn.CrossEntropyLoss()
-    
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.005)   # optimize all model parameters
+    #para = list(model.parameters())
+    #print(para)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)   # optimize all cnn parameters
     loss_func = torch.nn.CrossEntropyLoss()
     best_acc = 0.0
 
@@ -115,6 +122,8 @@ def main():
             optimizer.zero_grad()
 
             train_pred = model(data[0]) 
+            #print(train_pred.size())
+            #print(data[1].size()) 
             batch_loss = loss(train_pred, data[1])  
             batch_loss.backward()  
             optimizer.step()  
@@ -122,17 +131,15 @@ def main():
             train_acc += np.sum(np.argmax(train_pred.cpu().data.numpy(), axis=1) == data[1].numpy())
             train_loss += batch_loss.item()
 
-            #progress = ('#' * int(float(i) / len(train_loader) * 40)).ljust(40)
-            #print('[%03d/%03d] %2.2f sec(s) | %s |' % (epoch + 1, num_epoch, \
-            #                                          (time.time() - epoch_start_time), progress), end='\r', flush=True)
+            
 
         model.eval()
-        
         
         val_TP = 1.0
         val_TN = 1.0
         val_FN = 1.0
         val_FP = 1.0
+        
         predict_total = []
         label_total = []
     
@@ -149,35 +156,28 @@ def main():
             val_loss += batch_loss.item()
             
             
-            #progress = ('#' * int(float(i) / len(val_loader) * 40)).ljust(40)
-            #print('[%03d/%03d] %2.2f sec(s) | %s |' % (epoch + 1, num_epoch, \
-            #                                           (time.time() - epoch_start_time), progress), end='\r', flush=True)
-            
-            #test_pred = val_pred.max(1, keepdim=True)[1]
-            #test_labels_view = data[1].cuda().view_as(test_pred)
-            
             
         val_TP = ((predict_total == 1) & (label_total == 1)).sum().item()
         val_TN = ((predict_total == 0) & (label_total == 0)).sum().item()
         val_FN = ((predict_total == 0) & (label_total == 1)).sum().item()
         val_FP = ((predict_total == 1) & (label_total == 0)).sum().item()
     
-        val_spe = val_TN/(val_FP + val_TN + 0.0001)
-        val_rec = val_TP/(val_TP + val_FN + 0.0001)
-        test_acc = (val_TP+val_TN)/(val_FP + val_TN + val_TP + val_FN + 0.0001)
-            
+        val_spe = val_TN/(val_FP + val_TN + 0.001)
+        val_rec = val_TP/(val_TP + val_FN + 0.001)
+        test_acc = (val_TP+val_TN)/(val_FP + val_TN + val_TP + val_FN + 0.001)
+                           
         val_acc = val_acc / val_set.__len__()
-        print('%3.5f  %3.5f  %3.5f  %3.5f' % (train_acc / train_set.__len__(), train_loss, val_acc, val_loss))
+        print('%3.6f   %3.6f   %3.6f   %3.6f' % (train_acc / train_set.__len__(), train_loss, val_acc, val_loss))
 
         if (val_acc > best_acc):
-            with open('save/DEF_V4097_5.txt', 'w') as f:
+            with open('save/AET_V_0.txt', 'w') as f:
                 f.write(str(epoch) + '\t' + str(val_acc) + '\t' + str(val_spe) + '\t' + str(val_rec) + '\n')
             torch.save(model.state_dict(), 'save/model.pth')
             best_acc = val_acc
-            #print('Model Saved!')
-
-    #for name, param in model.named_parameters():
-    #    if param.requires_grad:
-    #        print(param[0])
+            
+    for name, param in model.named_parameters():
+        if param.requires_grad:
+            print(param[0])
 
 if __name__ == '__main__':
+    main()
