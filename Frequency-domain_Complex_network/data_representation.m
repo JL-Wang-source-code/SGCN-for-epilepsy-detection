@@ -1,4 +1,4 @@
-function [dataset] = graph_representation(data, aggr_num, method)
+function [dataset] = graph_representation(data, method)
 [n,m,~] = size(data);
 complex_network = [];
 self = eye(m);
@@ -37,5 +37,4 @@ test_data = [dataset(:,:,[(1201:1600),(2801:3200)])];
 train_label = [zeros(1200,1);ones(1200,1)];
 test_label = [zeros(400,1);ones(400,1)];
 dataset_name = inputname(1);
-num = int2str(aggr_num);
-save(['F:\dataset\',dataset_name,'_', method,'_', num,'.mat'],'train_data','train_label','test_data','test_label')
+save(['F:\dataset\',dataset_name,'_', method,'.mat'],'train_data','train_label','test_data','test_label')
