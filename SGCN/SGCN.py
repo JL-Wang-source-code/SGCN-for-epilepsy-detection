@@ -68,7 +68,7 @@ class CNNnet(torch.nn.Module):
           tmp_x = x
           for _ in range(self.k_hop):
               tmp_x = torch.matmul(tmp_x, x)
-          x = torch.matmul(self.aggregate_weight, x)
+          x = torch.matmul(self.aggregate_weight, tmp_x)
           x = self.conv1(x)
           x = self.conv2(x)
           x = self.mlp1(x.view(x.size(0),-1))
